@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Booking a Doctor's Appointment</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary': '#4f46e5',
+                        'highlight': '#fcd34d',
+                        'secondary-bg': '#f9fafb',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        .key-term {
+            cursor: help;
+            font-weight: 600;
+            padding: 2px 4px;
+            border-radius: 4px;
+            background-color: #fcd34d; /* highlight */
+            transition: all 0.2s;
+        }
+        .key-term:hover {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+        }
+        .exercise-input {
+            border: 2px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 8px 12px;
+            transition: border-color 0.2s;
+            width: 100%;
+            max-width: 300px;
+        }
+        .exercise-input:focus {
+            outline: none;
+            border-color: #4f46e5;
+        }
+        .tab {
+            cursor: pointer;
+            padding: 8px 16px;
+            border-bottom: 3px solid transparent;
+            font-weight: 500;
+            color: #6b7280;
+            transition: all 0.15s;
+        }
+        .tab.active {
+            color: #4f46e5;
+            border-color: #4f46e5;
+            font-weight: 600;
+        }
+        /* Styles for Matching Exercise */
+        .match-item {
+            cursor: pointer;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 500;
+            transition: all 0.15s;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+            border: 2px solid transparent;
+        }
+        .match-term-btn {
+            background-color: #eef2ff; /* Primary light */
+            color: #4f46e5;
+        }
+        .match-definition-btn {
+            background-color: #f3f4f6; /* Gray light */
+            color: #374151;
+        }
+        .match-item:hover:not(.selected):not(.matched) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .match-item.selected {
+            border-color: #4f46e5;
+            background-color: #c7d2fe; /* Primary lighter */
+        }
+        .match-item.matched {
+            cursor: default;
+            background-color: #d1fae5; /* Green light */
+            color: #065f46;
+            border-color: #10b981;
+            box-shadow: none;
+            pointer-events: none; /* Disable clicks once matched */
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans p-4 md:p-8">
+
+    <!-- Firebase SDK Imports (Mandatory structure) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global variables for Firebase
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+
+        let app, db, auth;
+
+        if (Object.keys(firebaseConfig).length > 0) {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            setLogLevel('Debug'); // Enable Firestore logging
+
+            // Mandatory authentication handling
+            const authSetup = async () => {
+                try {
+                    if (typeof __initial_auth_token !== 'undefined') {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    console.log('Firebase auth successful.');
+                } catch (error) {
+                    console.error('Firebase Auth Error:', error);
+                }
+            };
+            authSetup();
+        } else {
+             console.log("Firebase config not available. Running in standalone mode.");
+        }
+    </script>
+
+    <div id="toast" class="fixed bottom-4 right-4 z-50 transition-opacity duration-300 opacity-0 pointer-events-none">
+        <!-- Toast message box -->
+    </div>
+
+    <div class="max-w-4xl mx-auto bg-white shadow-xl rounded-xl p-6 md:p-10">
+
+        <header class="mb-6 border-b pb-4">
+            <h1 class="text-3xl font-bold text-primary" id="main-title-en">English for Healthcare: Booking an Appointment</h1>
+            <h1 class="text-3xl font-bold text-primary hidden" id="main-title-pt">Inglês para Saúde: Agendar uma Consulta</h1>
+            
+            <p class="text-gray-500 mt-1" id="subtitle-en">Practice essential vocabulary and phrases for communicating with a doctor's receptionist.</p>
+            <p class="text-gray-500 mt-1 hidden" id="subtitle-pt">Pratique vocabulário e frases essenciais para se comunicar com a recepcionista de um médico.</p>
+
+            <!-- Language Tabs -->
+            <div class="flex border-b mt-4">
+                <div id="tab-en" class="tab active" onclick="switchLanguage('en')">English</div>
+                <div id="tab-pt" class="tab" onclick="switchLanguage('pt')">Português</div>
+            </div>
+        </header>
+
+        <!-- Dynamic Content Container -->
+        <div id="content-container">
+            
+            <!-- ENGLISH CONTENT (Default) -->
+            <div id="content-en">
+                
+                <!-- Main Content: Key Phrases -->
+                <section class="mb-10">
+                    <h2 class="text-2xl font-semibold text-gray-700 mb-4">Essential Phrases</h2>
+        
+                    <!-- Patient Phrases -->
+                    <div class="mb-6">
+                        <h3 class="text-xl font-medium text-primary mb-2">Patient Phrases</h3>
+                        <ul class="list-disc pl-5 text-gray-700 space-y-2">
+                            <li>I need to <span class="key-term" data-term="make_appointment">make an appointment</span>.</li>
+                            <li>I need to see the doctor.</li>
+                            <li>When is the doctor free?</li>
+                            <li>I need to <span class="key-term" data-term="renew_prescription">renew my prescription</span>.</li>
+                            <li>Do you think the doctor could <span class="key-term" data-term="squeeze_in">squeeze us in</span> today?</li>
+                            <li>I need to make an appointment for my husband.</li>
+                            <li>My child needs to come in for a <span class="key-term" data-term="check_up">check-up</span>.</li>
+                            <li>The doctor wants to see me again in two week's time.</li>
+                            <li>I am an <span class="key-term" data-term="established_patient">established patient</span>.</li>
+                            <li>Do you accept <span class="key-term" data-term="new_patient">new patients</span>?</li>
+                            <li>What is the <span class="key-term" data-term="co_pay">co-pay</span> for this visit?</li>
+                        </ul>
+                    </div>
+        
+                    <!-- Receptionist Phrases -->
+                    <div>
+                        <h3 class="text-xl font-medium text-primary mb-2">Receptionist Phrases</h3>
+                        <ul class="list-disc pl-5 text-gray-700 space-y-2">
+                            <li>What is your <span class="key-term" data-term="chart_number">chart number</span>?</li>
+                            <li>What is the appointment regarding?</li>
+                            <li>Which day/what time is good for you?</li>
+                            <li>Is January the 3rd okay with you?</li>
+                            <li>How does four o'clock sound?</li>
+                            <li>We'll see you then.</li>
+                            <li>I'm sorry the doctor is not taking new patients.</li>
+                            <li>We'll call you if there are any <span class="key-term" data-term="cancellations">cancellations</span>.</li>
+                            <li>We're <span class="key-term" data-term="running_behind">running an hour behind schedule</span>.</li>
+                            <li>Dr Jones is away. You'll be seeing Dr Lindsay.</li>
+                            <li>Dr. Smith has been <span class="key-term" data-term="practicing_10">practicing for over 10 years</span>.</li>
+                            <li>Your referral is <span class="key-term" data-term="valid_year">valid for one year</span>.</li>
+                        </ul>
+                    </div>
+                </section>
+        
+                <!-- Sample Conversation -->
+                <section class="mb-10 p-6 bg-secondary-bg rounded-lg shadow-inner">
+                    <h2 class="text-2xl font-semibold text-gray-700 mb-4">Sample Conversation</h2>
+                    <div class="space-y-3 text-gray-800">
+                        <p><strong>Receptionist:</strong> Doctor's office. Jane speaking. How can I help you?</p>
+                        <p><strong>Caller:</strong> I need to make an appointment with Dr. Harris. I'm a **new patient**.</p>
+                        <p><strong>Receptionist:</strong> Welcome! We'd be happy to schedule you. Do you have a **referral** from another doctor?</p>
+                        <p><strong>Caller:</strong> Yes, I do. But before I book, what is the **co-pay** for a first-time consultation?</p>
+                        <p><strong>Receptionist:</strong> It's $25.00 for the **new patient** fee. Now, what is the appointment regarding?</p>
+                        <p><strong>Caller:</strong> Well, I've been fighting a cold for more than a week, and I think I might have a <span class="key-term" data-term="chest_infection">chest infection</span> or something. My cough is getting worse each day.</p>
+                        <p><strong>Receptionist:</strong> I see. Dr. Harris is a highly experienced physician, he's been **practicing for over 10 years**. He is off tomorrow. Do you think it can wait until Wednesday?</p>
+                        <p><strong>Caller:</strong> Oh, I was really hoping to get in today or tomorrow in case I need some <span class="key-term" data-term="antibiotics">antibiotics</span>.</p>
+                        <p><strong>Receptionist:</strong> Actually, we had a **cancellation** for 2:00pm today if you can get away from the office.</p>
+                        <p><strong>Caller:</strong> Gee, it's almost 1:00pm already. I think I can make it if I leave right now.</p>
+                        <p><strong>Receptionist:</strong> We're **running a bit behind schedule**, so you can probably count on seeing the doctor around 2:30.</p>
+                        <p><strong>Caller:</strong> That's great. Thanks for fitting me in.</p>
+                        <p><strong>Receptionist:</strong> No problem, Mr. Mason. Please bring your insurance card and referral; remember it's **valid for one year**. We'll see you in an hour or so.</p>
+                    </div>
+                </section>
+        
+                <!-- Key Terms Reference -->
+                <section id="key-terms-reference-en" class="mb-10 border-t pt-6">
+                    <h2 class="text-2xl font-semibold text-primary mb-4">Key Terms Reference</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+        
+                        <!-- Column 1 -->
+                        <div class="space-y-3">
+                            <p><strong><span class="key-term" data-term="make_appointment" style="background-color: #fcd34d;">Make an appointment</span>:</strong> To schedule a time to meet with the doctor.</p>
+                            <p><strong><span class="key-term" data-term="renew_prescription" style="background-color: #fcd34d;">Renew my prescription</span>:</strong> To get official permission from the doctor to continue taking a specific medication.</p>
+                            <p><strong><span class="key-term" data-term="squeeze_in" style="background-color: #fcd34d;">Squeeze (us) in</span>:</strong> An idiom meaning to fit someone into an already full schedule.</p>
+                            <p><strong><span class="key-term" data-term="check_up" style="background-color: #fcd34d;">Check-up</span>:</strong> A general medical examination to see if you are healthy.</p>
+                            <p><strong><span class="key-term" data-term="chart_number" style="background-color: #fcd34d;">Chart number</span>:</strong> A unique identification number for a patient's medical records.</p>
+                            <p><strong><span class="key-term" data-term="established_patient" style="background-color: #fcd34d;">Established patient</span>:</strong> A patient who has been seen by the doctor or clinic before.</p>
+                            <p><strong><span class="key-term" data-term="new_patient" style="background-color: #fcd34d;">New patient</span>:</strong> Someone who has never been seen by the doctor or clinic before.</p>
+                        </div>
+        
+                        <!-- Column 2 -->
+                        <div class="space-y-3">
+                            <p><strong><span class="key-term" data-term="cancellations" style="background-color: #fcd34d;">Cancellations</span>:</strong> Appointments that other patients have cancelled, opening up a time slot.</p>
+                            <p><strong><span class="key-term" data-term="running_behind" style="background-color: #fcd34d;">Running behind schedule</span>:</strong> To be late for appointments, often because the doctor is delayed.</p>
+                            <p><strong><span class="key-term" data-term="chest_infection" style="background-color: #fcd34d;">Chest infection</span>:</strong> A bacterial or viral illness affecting the lungs or bronchi.</p>
+                            <p><strong><span class="key-term" data-term="antibiotics" style="background-color: #fcd34d;">Antibiotics</span>:</strong> Medicine used to treat bacterial infections.</p>
+                            <p><strong><span class="key-term" data-term="walk_in_clinic" style="background-color: #fcd34d;">Walk-in-clinic</span>:</strong> A medical facility where patients can be seen without an appointment.</p>
+                            <p><strong><span class="key-term" data-term="co_pay" style="background-color: #fcd34d;">Co-pay</span>:</strong> A fixed fee paid by the patient for a medical service at the time of the visit.</p>
+                            <p><strong><span class="key-term" data-term="valid_year" style="background-color: #fcd34d;">Valid for one year</span>:</strong> A common phrase indicating the period a document (like a referral) is active.</p>
+                            <p><strong><span class="key-term" data-term="practicing_10" style="background-color: #fcd34d;">Practicing for over 10 years</span>:</strong> Refers to the doctor's professional experience length.</p>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- PORTUGUESE CONTENT (Hidden by Default) -->
+            <div id="content-pt" class="hidden">
+                
+                <!-- Main Content: Key Phrases -->
+                <section class="mb-10">
+                    <h2 class="text-2xl font-semibold text-gray-700 mb-4">Frases Essenciais</h2>
+        
+                    <!-- Patient Phrases -->
+                    <div class="mb-6">
+                        <h3 class="text-xl font-medium text-primary mb-2">Frases do Paciente</h3>
+                        <ul class="list-disc pl-5 text-gray-700 space-y-2">
+                            <li>Preciso <span class="key-term" data-term="make_appointment">marcar uma consulta</span>.</li>
+                            <li>Preciso ver o médico.</li>
+                            <li>Quando o médico está livre?</li>
+                            <li>Preciso <span class="key-term" data-term="renew_prescription">renovar minha receita</span>.</li>
+                            <li>Acha que o médico conseguiria <span class="key-term" data-term="squeeze_in">nos encaixar</span> hoje?</li>
+                            <li>Preciso marcar uma consulta para o meu marido.</li>
+                            <li>Meu filho precisa vir para um <span class="key-term" data-term="check_up">check-up</span>.</li>
+                            <li>O médico quer me ver novamente daqui a duas semanas.</li>
+                            <li>Eu sou um <span class="key-term" data-term="established_patient">paciente estabelecido</span>.</li>
+                            <li>Vocês aceitam <span class="key-term" data-term="new_patient">novos pacientes</span>?</li>
+                            <li>Qual é o <span class="key-term" data-term="co_pay">co-pay</span> (coparticipação) desta visita?</li>
+                        </ul>
+                    </div>
+        
+                    <!-- Receptionist Phrases -->
+                    <div>
+                        <h3 class="text-xl font-medium text-primary mb-2">Frases da Recepcionista</h3>
+                        <ul class="list-disc pl-5 text-gray-700 space-y-2">
+                            <li>Qual é o seu <span class="key-term" data-term="chart_number">número de prontuário</span>?</li>
+                            <li>Qual é o motivo da consulta?</li>
+                            <li>Qual dia/hora é bom para você?</li>
+                            <li>3 de janeiro está ok para você?</li>
+                            <li>O que acha das quatro horas?</li>
+                            <li>Vemo-nos então.</li>
+                            <li>Sinto muito, o médico não está aceitando novos pacientes.</li>
+                            <li>Ligaremos se houver algum <span class="key-term" data-term="cancellations">cancelamento</span>.</li>
+                            <li>Estamos <span class="key-term" data-term="running_behind">com uma hora de atraso</span>.</li>
+                            <li>Dr. Jones está ausente. Você verá o Dr. Lindsay.</li>
+                            <li>O Dr. Smith está <span class="key-term" data-term="practicing_10">praticando há mais de 10 anos</span>.</li>
+                            <li>Sua referência é <span class="key-term" data-term="valid_year">válida por um ano</span>.</li>
+                        </ul>
+                    </div>
+                </section>
+        
+                <!-- Sample Conversation -->
+                <section class="mb-10 p-6 bg-secondary-bg rounded-lg shadow-inner">
+                    <h2 class="text-2xl font-semibold text-gray-700 mb-4">Exemplo de Conversa</h2>
+                    <div class="space-y-3 text-gray-800">
+                        <p><strong>Recepcionista:</strong> Consultório Médico. Jane falando. Como posso ajudar?</p>
+                        <p><strong>Ligante:</strong> Preciso marcar uma consulta com o Dr. Harris. Eu sou um **paciente novo**.</p>
+                        <p><strong>Recepcionista:</strong> Bem-vindo! Teremos prazer em agendar. Você tem um **encaminhamento** de outro médico?</p>
+                        <p><strong>Ligante:</strong> Sim, eu tenho. Mas antes de agendar, qual é a **coparticipação** (**co-pay**) para uma primeira consulta?</p>
+                        <p><strong>Recepcionista:</strong> É R$25,00 para a taxa de **novo paciente**. Agora, qual é o motivo da consulta?</p>
+                        <p><strong>Ligante:</strong> Bem, estou lutando contra um resfriado há mais de uma semana, e acho que posso ter uma <span class="key-term" data-term="chest_infection">infecção no peito</span> ou algo assim. Minha tosse está piorando a cada dia.</p>
+                        <p><strong>Recepcionista:</strong> Entendo. O Dr. Harris é um médico altamente experiente, ele está **praticando há mais de 10 anos**. Ele estará fora amanhã. Acha que pode esperar até quarta-feira?</p>
+                        <p><strong>Ligante:</strong> Oh, eu realmente esperava ser atendido hoje ou amanhã, caso precise de <span class="key-term" data-term="antibiotics">antibióticos</span>.</p>
+                        <p><strong>Recepcionista:</strong> Na verdade, tivemos um **cancelamento** para as 14h de hoje, se você puder sair do escritório.</p>
+                        <p><strong>Ligante:</strong> Puxa, já é quase 13h. Acho que consigo chegar se sair agora.</p>
+                        <p><strong>Recepcionista:</strong> Estamos **com um pouco de atraso**, então você provavelmente será atendido por volta das 14h30.</p>
+                        <p><strong>Ligante:</strong> Ótimo. Obrigado por me encaixar.</p>
+                        <p><strong>Recepcionista:</strong> Sem problema, Sr. Mason. Por favor, traga seu cartão de seguro e encaminhamento; lembre-se de que é **válido por um ano**. Vemo-nos em cerca de uma hora.</p>
+                    </div>
+                </section>
+        
+                <!-- Key Terms Reference -->
+                <section id="key-terms-reference-pt" class="mb-10 border-t pt-6">
+                    <h2 class="text-2xl font-semibold text-primary mb-4">Referência de Termos-Chave</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+        
+                        <!-- Column 1 -->
+                        <div class="space-y-3">
+                            <p><strong><span class="key-term" data-term="make_appointment" style="background-color: #fcd34d;">Marcar uma consulta</span>:</strong> Agendar um horário para se encontrar com o médico.</p>
+                            <p><strong><span class="key-term" data-term="renew_prescription" style="background-color: #fcd34d;">Renovar minha receita</span>:</strong> Obter permissão oficial do médico para continuar tomando um medicamento específico.</p>
+                            <p><strong><span class="key-term" data-term="squeeze_in" style="background-color: #fcd34d;">Encaixar (alguém)</span>:</strong> Uma expressão que significa acomodar alguém em uma agenda já lotada.</p>
+                            <p><strong><span class="key-term" data-term="check_up" style="background-color: #fcd34d;">Check-up</span>:</strong> Um exame médico geral para verificar sua saúde.</p>
+                            <p><strong><span class="key-term" data-term="chart_number" style="background-color: #fcd34d;">Número de prontuário</span>:</strong> Um número de identificação exclusivo para os registros médicos de um paciente.</p>
+                            <p><strong><span class="key-term" data-term="established_patient" style="background-color: #fcd34d;">Paciente estabelecido</span>:</strong> Um paciente que já foi atendido pelo médico ou clínica antes.</p>
+                            <p><strong><span class="key-term" data-term="new_patient" style="background-color: #fcd34d;">Novo paciente</span>:</strong> Alguém que nunca foi atendido pelo médico ou clínica antes.</p>
+                        </div>
+        
+                        <!-- Column 2 -->
+                        <div class="space-y-3">
+                            <p><strong><span class="key-term" data-term="cancellations" style="background-color: #fcd34d;">Cancelamentos</span>:</strong> Consultas que outros pacientes cancelaram, abrindo um horário.</p>
+                            <p><strong><span class="key-term" data-term="running_behind" style="background-color: #fcd34d;">Estar atrasado</span>:</strong> Estar atrasado para consultas, geralmente porque o médico está demorando.</p>
+                            <p><strong><span class="key-term" data-term="chest_infection" style="background-color: #fcd34d;">Infecção no peito</span>:</strong> Uma doença bacteriana ou viral que afeta os pulmões ou brônquios.</p>
+                            <p><strong><span class="key-term" data-term="antibiotics" style="background-color: #fcd34d;">Antibióticos</span>:</strong> Medicamentos usados para tratar infecções bacterianas.</p>
+                            <p><strong><span class="key-term" data-term="walk_in_clinic" style="background-color: #fcd34d;">Clínica de pronto atendimento</span>:</strong> Uma instalação médica onde os pacientes podem ser atendidos sem hora marcada.</p>
+                            <p><strong><span class="key-term" data-term="co_pay" style="background-color: #fcd34d;">Co-pay (Coparticipação)</span>:</strong> Uma taxa fixa paga pelo paciente por um serviço médico no momento da visita.</p>
+                            <p><strong><span class="key-term" data-term="valid_year" style="background-color: #fcd34d;">Válido por um ano</span>:</strong> Uma frase comum que indica o período em que um documento (como um encaminhamento) está ativo.</p>
+                            <p><strong><span class="key-term" data-term="practicing_10" style="background-color: #fcd34d;">Praticando há mais de 10 anos</span>:</strong> Refere-se ao tempo de experiência profissional do médico.</p>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+        </div> <!-- End of Dynamic Content Container -->
+
+        <!-- Interactive Exercises -->
+        <section id="exercises" class="border-t pt-6">
+            <h2 class="text-2xl font-semibold text-primary mb-6">Interactive Exercises (Matching + 16 Fill-in-the-Blank)</h2>
+
+            <!-- NEW: Matching Exercise -->
+            <section id="matching-exercise" class="mb-10 p-6 bg-secondary-bg rounded-xl shadow-inner">
+                <h3 class="text-xl font-bold text-gray-700 mb-4">Matching Challenge (6 Pairs)</h3>
+                <p class="mb-4 text-gray-600">Click one term on the left and then its corresponding definition on the right. Once both are selected, click **Match Pair**.</p>
+                
+                <!-- Matching Grid -->
+                <div id="matching-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Column A (Terms) -->
+                    <div id="terms-column" class="space-y-3">
+                        <h4 class="font-bold text-lg text-primary mb-2 border-b border-primary/20 pb-1">Terms (Select one)</h4>
+                        <!-- Terms populated by JS -->
+                    </div>
+                    
+                    <!-- Column B (Definitions) -->
+                    <div id="definitions-column" class="space-y-3">
+                         <h4 class="font-bold text-lg text-gray-700 mb-2 border-b border-gray-700/20 pb-1">Definitions (Select one)</h4>
+                        <!-- Definitions populated by JS -->
+                    </div>
+                </div>
+
+                <div id="matching-summary" class="mt-6 p-4 border rounded-lg bg-white shadow-sm">
+                    <p class="mb-3 text-lg font-medium">Current Selection:</p>
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                        <span id="match-term-display" class="p-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-700 w-full sm:w-1/3 text-center truncate">Term (A)</span>
+                        <span id="match-definition-display" class="p-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-700 w-full sm:w-1/3 text-center truncate">Definition (B)</span>
+                        <button onclick="submitMatch()" id="submit-match-btn" class="bg-primary hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 shadow-md w-full sm:w-auto disabled:opacity-50" disabled>Match Pair</button>
+                    </div>
+                    <p id="match-feedback" class="mt-3 text-sm italic"></p>
+                </div>
+            </section>
+            <!-- END NEW: Matching Exercise -->
+
+            <h3 class="text-xl font-bold text-gray-700 mb-4 border-t pt-4">Fill-in-the-Blank Questions (16 Total)</h3>
+            <div class="space-y-4">
+                <!-- Exercise 1 -->
+                <div class="p-4 border rounded-lg bg-white shadow-sm">
+                    <p class="mb-3 text-lg font-medium">1. Fill in the blank (Scheduling):</p>
+                    <p class="mb-4">If the doctor is fully booked, you might ask the receptionist to try and \_\_\_\_\_\_\_\_\_\_ you in.</p>
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                        <input type="text" id="q1-input" class="exercise-input" placeholder="Type answer here (e.g., squeeze)">
+                        <button onclick="checkAnswer('q1', 'squeeze')" class="bg-primary hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 shadow-md">Check</button>
+                        <span id="q1-feedback" class="text-sm italic"></span>
+                    </div>
+                </div>
+
+                <!-- Exercise 2 -->
+                <div class="p-4 border rounded-lg bg-white shadow-sm">
+                    <p class="mb-3 text-lg font-medium">2. Fill in the blank (Medical):</p>
+                    <p class="mb-4">If you have a bacterial illness, the doctor might prescribe \_\_\_\_\_\_\_\_\_\_.</p>
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                        <input type="text" id="q2-input" class="exercise-input" placeholder="Type answer here (e.g., antibiotics)">
+                        <button onclick="checkAnswer('q2', 'antibiotics')" class="bg-primary hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 shadow-md">Check</button>
+                        <span id="q2-feedback" class="text-sm italic"></span>
+                    </div>
+                </div>
+
+                <!-- Exercise 3 -->
+                <div class="p-4 border rounded-lg bg-white shadow-sm">
+                    <p class="mb-3 text-lg font-medium">3. Fill in the blank (Status):</p>
+                    <p class="mb-4">The receptionist informed the patient, "We are \_\_\_\_\_\_\_\_\_\_ behind schedule, so you will be seen in 30 minutes."</p>
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                        <input type="text" id="q3-input" class="exercise-input" placeholder="Type answer here (e.g., running)">
+                        <button onclick="checkAnswer('q3', 'running')" class="bg-primary hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 shadow-md">Check</button>
+                        <span id="q3-feedback" class="text-sm italic"></span>
+                    </div>
+                </div>
+                
+                <!-- Exercise 4 -->
+                <div class="p-4 border rounded-lg bg-white shadow-sm">
+                    <p class="mb-3 text-lg font-medium">4. Fill in the blank (Medical Exam):</p>
+                    <p class="mb-4">The doctor is performing a routine annual \_\_\_\_\_\_\_\_\_\_ to ensure everything is okay.</p>
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                        <input type="text" id="q4-input" class="exercise-input" placeholder="Type answer here (e.g., checkup)">
+                        <button onclick="checkAnswer('q4', 'checkup')" class="bg-primary hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 shadow-md">Check</button>
+                        <span id="q4-feedback" class="text-sm italic"></span>
+                    </div>
+                </div>
+
+                <!-- Exercise 5 -->
+                <div class="p-4 border rounded-lg bg-white shadow-sm">
+                    <p class="mb-3 text-lg font-medium">5. Fill in the blank (Identification):</p>
+                    <p class="mb-4">To easily find your medical records, the receptionist will ask for your \_\_\_\_\_\_\_\_\_\_ number.</p>
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                        <input type="text" id="q5-input" class="exercise-input" placeholder="Type answer here (e.g., chart)">
+                        <button onclick="checkAnswer('q5', 'chart')" class="bg-primary hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 shadow-md">Check</button>
+                        <span id="q5-feedback" class="text-sm italic"></span>
+                    </div>
+                </div>
+
+                <!-- Exercise 6 -->
+                <div class="p-4 border rounded-lg bg-white shadow-sm">
+                    <p class="mb-3 text-lg font-medium">6. Fill in the blank (Scheduling):</p>
+                    <p class="mb-4">If someone misses their appointment, it creates an opportunity for \_\_\_\_\_\_\_\_\_\_.</p>
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                        <input type="text" id="q6-input" class="exercise-input" placeholder="Type answer here (e.g., cancellations)">
+                        <button onclick="checkAnswer('q6', 'cancellations')" class="bg-primary hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 shadow-md">Check</button>
+                        <span id="q6-feedback" class="text-sm italic"></span>
+                    </div>
+                </div>
+                
+                <!-- Exercise 7 (NEW) -->
+                <div class="p-4 border rounded-lg bg-white shadow-sm">
+                    <p class="mb-3 text-lg font-medium">7. Fill in the blank (Prescription):</p>
+                    <p class="mb-4">If you need more pills from your previous doctor's visit, you need to \_\_\_\_\_\_\_\_\_\_ your prescription.</p>
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                        <input type="text" id="q7-input" class="exercise-input" placeholder="Type answer here (e.g., renew)">
+                        <button onclick="checkAnswer('q7', 'renew')" class="bg-primary hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 shadow-md">Check</button>
+                        <span id="q7-feedback" class="text-sm italic"></span>
+                    </div>
+                </div>
+
+                <!-- Exercise 8 (NEW) -->
+                <div class="p-4 border rounded-lg bg-white shadow-sm">
+                    <p class="mb-3 text-lg font-medium">8. Fill in the blank (Patient Status):</p>
+                    <p class="mb-4">Since you were here last year, you are considered an \_\_\_\_\_\_\_\_\_\_ patient.</p>
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                        <input type="text" id="q8-input" class="exercise-input" placeholder="Type answer here (e.g., established)">
+                        <button onclick="checkAnswer('q8', 'established')" class="bg-primary hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 shadow-md">Check</button>
+                        <span id="q8-feedback" class="text-sm italic"></span>
+                    </div>
+                </div>
+                
+                <!-- Exercise 9 (NEW) -->
+                <div class="p-4 border rounded-lg bg-white shadow-sm">
+                    <p class="mb-3 text-lg font-medium">9. Fill in the blank (Patient Status):</p>
+                    <p class="mb-4">This office is not currently taking on any \_\_\_\_\_\_\_\_\_\_ patients, as the doctor's schedule is full.</p>
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                        <input type="text" id="q9-input" class="exercise-input" placeholder="Type answer here (e.g., new)">
+                        <button onclick="checkAnswer('q9', 'new')" class="bg-primary hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 shadow-md">Check</button>
+                        <span id="q9-feedback" class="text-sm italic"></span>
+                    </div>
+                </div>
+
+                <!-- Exercise 10 (NEW) -->
+                <div class="p-4 border rounded-lg bg-white shadow-sm">
+                    <p class="mb-3 text-lg font-medium">10. Fill in the blank (Payment):</p>
+                    <p class="mb-4">The insurance requires a twenty-dollar \_\_\_\_\_\_\_\_\_\_ every time you visit the clinic.</p>
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                        <input type="text" id="q10-input" class="exercise-input" placeholder="Type answer here (e.g., copay)">
+                        <button onclick="checkAnswer('q10', 'copay')" class="bg-primary hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 shadow-md">Check</button>
+                        <span id="q10-feedback" class="text-sm italic"></span>
+                    </div>
+                </div>
+
+                <!-- Exercise 11 (NEW) -->
+                <div class="p-4 border rounded-lg bg-white shadow-sm">
+                    <p class="mb-3 text-lg font-medium">11. Fill in the blank (Location):</p>
+                    <p class="mb-4">For immediate care without an appointment, the patient decided to go to a \_\_\_\_\_\_\_\_\_\_ clinic.</p>
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                        <input type="text" id="q11-input" class="exercise-input" placeholder="Type answer here (e.g., walkin)">
+                        <button onclick="checkAnswer('q11', 'walkin')" class="bg-primary hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 shadow-md">Check</button>
+                        <span id="q11-feedback" class="text-sm italic"></span>
+                    </div>
+                </div>
+
+                <!-- Exercise 12 (NEW) -->
+                <div class="p-4 border rounded-lg bg-white shadow-sm">
+                    <p class="mb-3 text-lg font-medium">12. Fill in the blank (Time Limit):</p>
+                    <p class="mb-4">The referral note states that the document is \_\_\_\_\_\_\_\_\_\_ for one year before it expires.</p>
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                        <input type="text" id="q12-input" class="exercise-input" placeholder="Type answer here (e.g., valid)">
+                        <button onclick="checkAnswer('q12', 'valid')" class="bg-primary hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 shadow-md">Check</button>
+                        <span id="q12-feedback" class="text-sm italic"></span>
+                    </div>
+                </div>
+
+                <!-- Exercise 13 (NEW) -->
+                <div class="p-4 border rounded-lg bg-white shadow-sm">
+                    <p class="mb-3 text-lg font-medium">13. Fill in the blank (Ailment):</p>
+                    <p class="mb-4">The patient worried the persistent cough meant they had a \_\_\_\_\_\_\_\_\_\_ infection.</p>
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                        <input type="text" id="q13-input" class="exercise-input" placeholder="Type answer here (e.g., chest)">
+                        <button onclick="checkAnswer('q13', 'chest')" class="bg-primary hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 shadow-md">Check</button>
+                        <span id="q13-feedback" class="text-sm italic"></span>
+                    </div>
+                </div>
+
+                <!-- Exercise 14 (NEW) -->
+                <div class="p-4 border rounded-lg bg-white shadow-sm">
+                    <p class="mb-3 text-lg font-medium">14. Fill in the blank (Identification):</p>
+                    <p class="mb-4">The receptionist needs the patient's \_\_\_\_\_\_\_\_\_\_ number to quickly locate their medical records.</p>
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                        <input type="text" id="q14-input" class="exercise-input" placeholder="Type answer here (e.g., chart)">
+                        <button onclick="checkAnswer('q14', 'chart')" class="bg-primary hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 shadow-md">Check</button>
+                        <span id="q14-feedback" class="text-sm italic"></span>
+                    </div>
+                </div>
+
+                <!-- Exercise 15 (NEW) -->
+                <div class="p-4 border rounded-lg bg-white shadow-sm">
+                    <p class="mb-3 text-lg font-medium">15. Fill in the blank (Experience):</p>
+                    <p class="mb-4">We chose Dr. Smith because he has been \_\_\_\_\_\_\_\_\_\_ medicine for over 20 years.</p>
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                        <input type="text" id="q15-input" class="exercise-input" placeholder="Type answer here (e.g., practicing)">
+                        <button onclick="checkAnswer('q15', 'practicing')" class="bg-primary hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 shadow-md">Check</button>
+                        <span id="q15-feedback" class="text-sm italic"></span>
+                    </div>
+                </div>
+
+                <!-- Exercise 16 (NEW) -->
+                <div class="p-4 border rounded-lg bg-white shadow-sm">
+                    <p class="mb-3 text-lg font-medium">16. Fill in the blank (Scheduling):</p>
+                    <p class="mb-4">The first step to seeing the doctor is to make an \_\_\_\_\_\_\_\_\_\_ with the receptionist.</p>
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                        <input type="text" id="q16-input" class="exercise-input" placeholder="Type answer here (e.g., appointment)">
+                        <button onclick="checkAnswer('q16', 'appointment')" class="bg-primary hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150 shadow-md">Check</button>
+                        <span id="q16-feedback" class="text-sm italic"></span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // --- Matching Exercise Data ---
+        const matchData = [
+            { key: 'squeeze_in', term: 'Squeeze in', definition: 'Fit someone into an already full schedule.' },
+            { key: 'established_patient', term: 'Established Patient', definition: 'A patient who has been seen by the doctor or clinic before.' },
+            { key: 'co_pay', term: 'Co-pay', definition: 'A fixed fee paid by the patient for a medical service.' },
+            { key: 'running_behind', term: 'Running Behind', definition: 'The doctor is late and appointments are delayed.' },
+            { key: 'cancellations', term: 'Cancellations', definition: 'Open time slots created when other patients miss their appointments.' },
+            { key: 'renew_prescription', term: 'Renew Prescription', definition: 'Get official permission to continue taking a specific medication.' },
+        ];
+
+        let currentSelection = {
+            termKey: null,
+            defKey: null,
+            termElement: null,
+            defElement: null
+        };
+        let matchedPairsCount = 0;
+
+        /**
+         * Custom toast/message box function.
+         */
+        function showToast(message, type) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            
+            // Set colors based on type
+            if (type === 'success') {
+                toast.className = 'fixed bottom-4 right-4 z-50 p-4 rounded-lg shadow-xl bg-green-500 text-white';
+            } else if (type === 'error') {
+                toast.className = 'fixed bottom-4 right-4 z-50 p-4 rounded-lg shadow-xl bg-red-500 text-white';
+            } else {
+                 toast.className = 'fixed bottom-4 right-4 z-50 p-4 rounded-lg shadow-xl bg-gray-700 text-white';
+            }
+
+            // Show the toast
+            toast.style.opacity = '1';
+            toast.style.pointerEvents = 'auto';
+
+            // Hide the toast after 3 seconds
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.pointerEvents = 'none';
+            }, 3000);
+        }
+
+        /**
+         * Helper function to shuffle an array (Fisher-Yates algorithm).
+         */
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        /**
+         * Renders the matching exercise grid.
+         */
+        function generateMatchingExercise() {
+            const termsColumn = document.getElementById('terms-column');
+            const definitionsColumn = document.getElementById('definitions-column');
+            const matchBtn = document.getElementById('submit-match-btn');
+            
+            // Clone and shuffle data for definitions column
+            const definitionsData = shuffleArray([...matchData]);
+
+            // Clear previous content
+            termsColumn.innerHTML = '<h4 class="font-bold text-lg text-primary mb-2 border-b border-primary/20 pb-1">Terms (Select one)</h4>';
+            definitionsColumn.innerHTML = '<h4 class="font-bold text-lg text-gray-700 mb-2 border-b border-gray-700/20 pb-1">Definitions (Select one)</h4>';
+
+            matchBtn.disabled = true;
+            resetSelection(); // Reset selection state
+
+            // Render Terms (Column A)
+            matchData.forEach(item => {
+                const termDiv = document.createElement('div');
+                termDiv.className = 'match-item match-term-btn';
+                termDiv.textContent = item.term;
+                termDiv.setAttribute('data-key', item.key);
+                termDiv.onclick = () => selectMatchItem('term', item.key, termDiv);
+                termsColumn.appendChild(termDiv);
+            });
+
+            // Render Definitions (Column B)
+            definitionsData.forEach(item => {
+                const defDiv = document.createElement('div');
+                defDiv.className = 'match-item match-definition-btn text-left';
+                defDiv.textContent = item.definition;
+                defDiv.setAttribute('data-key', item.key);
+                defDiv.onclick = () => selectMatchItem('definition', item.key, defDiv);
+                definitionsColumn.appendChild(defDiv);
+            });
+        }
+
+        /**
+         * Handles the user selecting a term or definition button.
+         */
+        function selectMatchItem(type, key, element) {
+            const isTerm = type === 'term';
+            const currentElementKey = isTerm ? 'termElement' : 'defElement';
+            const currentKey = isTerm ? 'termKey' : 'defKey';
+            const displayId = isTerm ? 'match-term-display' : 'match-definition-display';
+            
+            const matchBtn = document.getElementById('submit-match-btn');
+            const feedback = document.getElementById('match-feedback');
+
+            // 1. Deselect if already selected
+            if (currentSelection[currentElementKey] === element) {
+                element.classList.remove('selected');
+                currentSelection[currentElementKey] = null;
+                currentSelection[currentKey] = null;
+                document.getElementById(displayId).textContent = isTerm ? 'Term (A)' : 'Definition (B)';
+            } 
+            // 2. Select the new item
+            else {
+                // If another item of the same type was selected, deselect it
+                if (currentSelection[currentElementKey]) {
+                    currentSelection[currentElementKey].classList.remove('selected');
+                }
+                
+                // Select the new one
+                element.classList.add('selected');
+                currentSelection[currentElementKey] = element;
+                currentSelection[currentKey] = key;
+                document.getElementById(displayId).textContent = isTerm ? element.textContent.trim() : element.textContent.trim();
+            }
+
+            // 3. Enable/Disable Match button
+            if (currentSelection.termKey && currentSelection.defKey) {
+                matchBtn.disabled = false;
+                feedback.textContent = 'Ready to match!';
+                feedback.className = 'mt-3 text-sm italic text-gray-700';
+            } else {
+                matchBtn.disabled = true;
+                feedback.textContent = 'Select one term and one definition.';
+                feedback.className = 'mt-3 text-sm italic text-red-500';
+            }
+        }
+
+        /**
+         * Resets the selection state after a match attempt.
+         */
+        function resetSelection() {
+            if (currentSelection.termElement) currentSelection.termElement.classList.remove('selected');
+            if (currentSelection.defElement) currentSelection.defElement.classList.remove('selected');
+            
+            currentSelection.termKey = null;
+            currentSelection.defKey = null;
+            currentSelection.termElement = null;
+            currentSelection.defElement = null;
+
+            document.getElementById('match-term-display').textContent = 'Term (A)';
+            document.getElementById('match-definition-display').textContent = 'Definition (B)';
+            document.getElementById('submit-match-btn').disabled = true;
+            document.getElementById('match-feedback').textContent = 'Select one term and one definition.';
+            document.getElementById('match-feedback').className = 'mt-3 text-sm italic';
+        }
+
+        /**
+         * Checks if the current selection is a correct match.
+         */
+        function submitMatch() {
+            if (currentSelection.termKey && currentSelection.defKey) {
+                const matchBtn = document.getElementById('submit-match-btn');
+                const feedback = document.getElementById('match-feedback');
+
+                // Check for match
+                if (currentSelection.termKey === currentSelection.defKey) {
+                    // Correct Match
+                    matchedPairsCount++;
+                    
+                    currentSelection.termElement.classList.add('matched');
+                    currentSelection.defElement.classList.add('matched');
+
+                    const total = matchData.length;
+                    feedback.textContent = `Correct! ${matchedPairsCount} of ${total} matched.`;
+                    feedback.className = 'mt-3 text-sm italic text-green-600 font-semibold';
+                    showToast('Match Found!', 'success');
+
+                    // Check for completion
+                    if (matchedPairsCount === total) {
+                        feedback.textContent = 'Congratulations! You matched all the terms correctly.';
+                        feedback.className = 'mt-3 text-lg font-bold text-green-700';
+                        matchBtn.disabled = true;
+                        showToast('Exercise Complete!', 'success');
+                    }
+                    
+                    resetSelection();
+
+                } else {
+                    // Incorrect Match
+                    feedback.textContent = 'Incorrect pair. Try again!';
+                    feedback.className = 'mt-3 text-sm italic text-red-600 font-semibold';
+                    showToast('Incorrect Match.', 'error');
+
+                    // Visually shake/highlight incorrect items briefly
+                    currentSelection.termElement.style.animation = 'shake 0.5s';
+                    currentSelection.defElement.style.animation = 'shake 0.5s';
+                    setTimeout(() => {
+                        currentSelection.termElement.style.animation = '';
+                        currentSelection.defElement.style.animation = '';
+                        resetSelection();
+                    }, 500);
+                }
+            }
+        }
+
+        /**
+         * Checks the user's answer against the correct answer (for fill-in-the-blank).
+         */
+        function checkAnswer(questionId, correctAnswer) {
+            const input = document.getElementById(`${questionId}-input`);
+            const feedback = document.getElementById(`${questionId}-feedback`);
+            // Normalize input: trim whitespace, convert to lowercase, and remove non-alphanumeric characters (including hyphens)
+            const userAnswer = input.value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+            const correct = correctAnswer.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+            if (userAnswer === correct) {
+                feedback.textContent = 'Correct! Great job.';
+                feedback.className = 'text-sm italic text-green-600 font-semibold';
+                input.classList.remove('border-red-500');
+                input.classList.add('border-green-500');
+                showToast('Correct Answer!', 'success');
+            } else {
+                // Determine the current language for toast feedback
+                const lang = document.getElementById('tab-en').classList.contains('active') ? 'en' : 'pt';
+                // Provide a hint with the first letter of the *correct* answer
+                const tryAgainMessage = lang === 'en' ? `Try again. The answer starts with '${correct.charAt(0).toUpperCase()}'...` : `Tente novamente. A resposta começa com '${correct.charAt(0).toUpperCase()}'...`;
+                const incorrectToast = lang === 'en' ? 'Incorrect. Try again.' : 'Incorreto. Tente novamente.';
+
+                feedback.textContent = tryAgainMessage;
+                feedback.className = 'text-sm italic text-red-600';
+                input.classList.remove('border-green-500');
+                input.classList.add('border-red-500');
+                showToast(incorrectToast, 'error');
+            }
+        }
+        
+        /**
+         * Switches the display language for the content sections.
+         */
+        function switchLanguage(lang) {
+            const languages = ['en', 'pt'];
+            
+            // Update tabs
+            languages.forEach(l => {
+                document.getElementById(`tab-${l}`).classList.remove('active');
+            });
+            document.getElementById(`tab-${lang}`).classList.add('active');
+
+            // Update content visibility
+            languages.forEach(l => {
+                const content = document.getElementById(`content-${l}`);
+                const title = document.getElementById(`main-title-${l}`);
+                const subtitle = document.getElementById(`subtitle-${l}`);
+
+                if (content) content.classList.add('hidden');
+                if (title) title.classList.add('hidden');
+                if (subtitle) subtitle.classList.add('hidden');
+            });
+
+            const activeContent = document.getElementById(`content-${lang}`);
+            const activeTitle = document.getElementById(`main-title-${lang}`);
+            const activeSubtitle = document.getElementById(`subtitle-${lang}`);
+
+            if (activeContent) activeContent.classList.remove('hidden');
+            if (activeTitle) activeTitle.classList.remove('hidden');
+            if (activeSubtitle) activeSubtitle.classList.remove('hidden');
+        }
+
+        // Initialize to English (default) and generate matching exercise
+        window.onload = () => {
+             switchLanguage('en');
+             generateMatchingExercise();
+        };
+    </script>
+</body>
+</html>
